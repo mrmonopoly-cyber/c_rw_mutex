@@ -3,14 +3,14 @@
 
 #include <stdint.h>
 
-typedef struct {uint8_t data[sizeof(void*) + 8];} RW_mutex;
-typedef struct RW_lock RW_lock;
-typedef struct R_lock R_lock;
+typedef struct {uint8_t private_data[sizeof(void*) + 8];} RW_mutex;
+typedef struct {uint8_t private_data[sizeof(void*)];} W_lock;
+typedef struct {uint8_t private_data[sizeof(void*)];} R_lock;
 
 /*
  * INFO: The library does NOT allocate memory to create the mutex or the lock.
  * Also, when unlocking, it does not free any memory. If you allocate in 
- * HEAP the RW_mutex, the RW_lock, or the R_lock, you have to free them by yourself.
+ * HEAP the RW_mutex, the W_lock, or the R_lock, you have to free them by yourself.
  */
 
 /*
@@ -38,23 +38,23 @@ int mutex_r_lock(RW_mutex* mutex, R_lock* o_lock);
 /*
  * Acquire a write lock on the mutex.
  * mutex: Pointer to the mutex.
- * o_lock: Pointer to an already allocated RW_lock structure.
+ * o_lock: Pointer to an already allocated W_lock structure.
  *
  * RETURN:
  *  - EXIT_SUCCESS if the lock was successfully acquired.
  *  - EXIT_FAILURE if there was an error.
  */
-int mutex_w_lock(RW_mutex* mutex, RW_lock* o_lock);
+int mutex_w_lock(RW_mutex* mutex, W_lock* o_lock);
 
 /*
  * Release a previously acquired write lock.
- * lock: Pointer to the RW_lock structure holding the write lock.
+ * lock: Pointer to the W_lock structure holding the write lock.
  *
  * RETURN:
  *  - EXIT_SUCCESS if the lock was successfully released.
  *  - EXIT_FAILURE if there was an error.
  */
-int mutex_w_unlock(RW_lock* lock);
+int mutex_w_unlock(W_lock* lock);
 
 /*
  * Release a previously acquired read lock.
@@ -92,7 +92,7 @@ int r_lock_data_cmp(R_lock* lock, void* buffer, uint8_t buffer_size);
 
 /*
  * Read the protected data using the write lock.
- * lock: Pointer to the RW_lock structure.
+ * lock: Pointer to the W_lock structure.
  * o_buffer: Buffer where the read data will be stored.
  * buffer_size: Size of the output buffer.
  *
@@ -100,11 +100,11 @@ int r_lock_data_cmp(R_lock* lock, void* buffer, uint8_t buffer_size);
  *  - EXIT_SUCCESS if the data was successfully read.
  *  - EXIT_FAILURE if there was an error.
  */
-int rw_lock_data_read(RW_lock* lock, void* o_buffer, uint8_t buffer_size);
+int rw_lock_data_read(W_lock* lock, void* o_buffer, uint8_t buffer_size);
 
 /*
  * Compare the protected data with the data in the provided buffer using the write lock.
- * lock: Pointer to the RW_lock structure.
+ * lock: Pointer to the W_lock structure.
  * buffer: Buffer containing the data to compare with.
  * buffer_size: Size of the buffer to compare.
  *
@@ -112,11 +112,11 @@ int rw_lock_data_read(RW_lock* lock, void* o_buffer, uint8_t buffer_size);
  *  - EXIT_SUCCESS if the data matches.
  *  - EXIT_FAILURE if there is a mismatch or an error occurs.
  */
-int rw_lock_data_cmp(RW_lock* lock, void* buffer, uint8_t buffer_size);
+int rw_lock_data_cmp(W_lock* lock, void* buffer, uint8_t buffer_size);
 
 /*
  * Write data to the protected area using the write lock.
- * lock: Pointer to the RW_lock structure.
+ * lock: Pointer to the W_lock structure.
  * buffer: Buffer containing the data to write.
  * buffer_size: Size of the data to write.
  *
@@ -124,7 +124,7 @@ int rw_lock_data_cmp(RW_lock* lock, void* buffer, uint8_t buffer_size);
  *  - EXIT_SUCCESS if the data was successfully written.
  *  - EXIT_FAILURE if there was an error.
  */
-int rw_lock_data_write(RW_lock* lock, void* buffer, uint8_t buffer_size);
+int rw_lock_data_write(W_lock* lock, void* buffer, uint8_t buffer_size);
 
 #endif // !__RW_MUTEX__
 

@@ -16,20 +16,20 @@ struct common_lock{
     RW_mutex_t* mutex;
 };
 
-struct R_lock{
-    struct common_lock data;
-};
-
-struct RW_lock{
-    struct common_lock data;
-};
-
 typedef union{
     RW_mutex* raw_data;
     RW_mutex_t* full_data;
 }mutex_conv;
 
+typedef union{
+    W_lock* w_lock;
+    R_lock* r_lock;
+    struct common_lock* c_lock;
+}lock_conv;
+
 STATIC_ASSERT(sizeof(RW_mutex) == sizeof(RW_mutex_t), mutex_header_imp_same_size);
+STATIC_ASSERT(sizeof(R_lock) == sizeof(lock_conv), mutex_header_imp_same_size);
+STATIC_ASSERT(sizeof(W_lock) == sizeof(lock_conv), mutex_header_imp_same_size);
 
 //private
 #define CHECK_INIT(MUTEX) if (!MUTEX || !MUTEX->data_ptr) { return EXIT_FAILURE;}
@@ -109,6 +109,7 @@ int mutex_r_lock(RW_mutex* mutex, R_lock* o_lock)
     }
     
     mutex_conv conv = {.raw_data =mutex};
+    lock_conv conv_l = {.r_lock = o_lock};
     CHECK_INIT(conv.full_data);
 
     conv.full_data->mu_lock = 1;
@@ -117,19 +118,20 @@ int mutex_r_lock(RW_mutex* mutex, R_lock* o_lock)
     }
     conv.full_data->reading++;
 
-    o_lock->data.mutex = conv.full_data;
+    conv_l.c_lock->mutex = conv.full_data;
 
     conv.full_data->mu_lock = 0;
     return EXIT_SUCCESS;
 }
 
-int mutex_w_lock(RW_mutex* mutex, RW_lock* o_lock)
+int mutex_w_lock(RW_mutex* mutex, W_lock* o_lock)
 {
     if (!mutex || !o_lock) {
         return EXIT_FAILURE;
     }
     
     mutex_conv conv = {.raw_data =mutex};
+    lock_conv conv_l = {.w_lock = o_lock};
     CHECK_INIT(conv.full_data);
 
     conv.full_data->mu_lock = 1;
@@ -138,73 +140,100 @@ int mutex_w_lock(RW_mutex* mutex, RW_lock* o_lock)
     }
     conv.full_data->writing=1;
 
-    o_lock->data.mutex = conv.full_data;
+    conv_l.c_lock->mutex = conv.full_data;
 
     conv.full_data->mu_lock = 0;
     return EXIT_SUCCESS;
 }
 
-int mutex_w_unlock(RW_lock* lock)
+int mutex_w_unlock(W_lock* lock)
 {
-    if (!lock || !lock->data.mutex) {
+    lock_conv conv = { .w_lock = lock};
+    if (!lock || !conv.c_lock->mutex) {
         return EXIT_FAILURE;
     }
 
-    CHECK_INIT(lock->data.mutex);
+    CHECK_INIT(conv.c_lock->mutex);
 
-    if (lock->data.mutex->mu_lock) {
+    if (conv.c_lock->mutex->mu_lock) {
         return EXIT_FAILURE;
     }
 
-    lock->data.mutex->mu_lock =1;
-    lock->data.mutex->writing = 0;
-    lock->data.mutex->mu_lock =0;
-    lock->data.mutex = NULL;
+    conv.c_lock->mutex->mu_lock =1;
+    conv.c_lock->mutex->writing =0;
+    conv.c_lock->mutex->mu_lock =0;
+    conv.c_lock->mutex = NULL;
 
     return EXIT_SUCCESS;
 }
 
 int mutex_r_unlock(R_lock* lock)
 {
-    if (!lock || !lock->data.mutex) {
+    if (!lock) {
+        return EXIT_FAILURE;
+    }
+    lock_conv conv_l = {.r_lock = lock};
+
+    CHECK_INIT(conv_l.c_lock->mutex);
+
+    if (conv_l.c_lock->mutex->mu_lock) {
         return EXIT_FAILURE;
     }
 
-    CHECK_INIT(lock->data.mutex);
-
-    if (lock->data.mutex->mu_lock) {
-        return EXIT_FAILURE;
-    }
-
-    lock->data.mutex->mu_lock =1;
-    lock->data.mutex->reading--;
-    lock->data.mutex->mu_lock =0;
-    lock->data.mutex = NULL;
+    conv_l.c_lock->mutex->mu_lock =1;
+    conv_l.c_lock->mutex->reading--;
+    conv_l.c_lock->mutex->mu_lock =0;
+    conv_l.c_lock->mutex = NULL;
 
     return EXIT_SUCCESS;
 }
 
 int r_lock_data_read(R_lock* lock, void* o_buffer, uint8_t buffer_size)
 {
-    return common_lock_data_read(&lock->data, o_buffer, buffer_size);
+    if (!lock) {
+        return EXIT_FAILURE;
+    }
+    lock_conv conv = {.r_lock = lock};
+    CHECK_INIT(conv.c_lock->mutex);
+    return common_lock_data_read(conv.c_lock, o_buffer, buffer_size);
 }
 
 int r_lock_data_cmp(R_lock* lock, void* buffer, uint8_t buffer_size)
 {
-    return common_lock_data_cmp(&lock->data, buffer, buffer_size);
+    if (!lock) {
+        return EXIT_FAILURE;
+    }
+    lock_conv conv = {.r_lock = lock};
+    CHECK_INIT(conv.c_lock->mutex);
+    return common_lock_data_cmp(conv.c_lock, buffer, buffer_size);
 }
 
-int rw_lock_data_read(RW_lock* lock, void* o_buffer, uint8_t buffer_size)
+int rw_lock_data_read(W_lock* lock, void* o_buffer, uint8_t buffer_size)
 {
-    return common_lock_data_read(&lock->data, o_buffer, buffer_size);
+    if (!lock) {
+        return EXIT_FAILURE;
+    }
+    lock_conv conv = {.w_lock = lock};
+    CHECK_INIT(conv.c_lock->mutex);
+    return common_lock_data_read(conv.c_lock, o_buffer, buffer_size);
 }
 
-int rw_lock_data_cmp(RW_lock* lock, void* buffer, uint8_t buffer_size)
+int rw_lock_data_cmp(W_lock* lock, void* buffer, uint8_t buffer_size)
 {
-    return common_lock_data_cmp(&lock->data, buffer, buffer_size);
+    if (!lock) {
+        return EXIT_FAILURE;
+    }
+    lock_conv conv = {.w_lock = lock};
+    CHECK_INIT(conv.c_lock->mutex);
+    return common_lock_data_cmp(conv.c_lock, buffer, buffer_size);
 }
 
-int rw_lock_data_write(RW_lock* lock, void* buffer, uint8_t buffer_size)
+int rw_lock_data_write(W_lock* lock, void* buffer, uint8_t buffer_size)
 {
-    return common_lock_data_write(&lock->data, buffer, buffer_size);
+    if (!lock) {
+        return EXIT_FAILURE;
+    }
+    lock_conv conv = {.w_lock = lock};
+    CHECK_INIT(conv.c_lock->mutex);
+    return common_lock_data_write(conv.c_lock, buffer, buffer_size);
 }
