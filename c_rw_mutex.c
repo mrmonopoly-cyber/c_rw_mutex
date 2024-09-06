@@ -41,7 +41,7 @@ STATIC_ASSERT(sizeof(W_lock) == sizeof(lock_conv), mutex_header_imp_same_size);
 
 static int common_lock_data_read(struct common_lock *lock, void *o_buffer,
                                  uint8_t buffer_size) {
-  if (!lock || !o_buffer || !buffer_size || lock->mutex->writing ||
+  if (!lock || !o_buffer || !buffer_size ||
       buffer_size < lock->mutex->data_size) {
     return EXIT_FAILURE;
   }
@@ -53,7 +53,7 @@ static int common_lock_data_cmp(struct common_lock *lock, void *buffer,
                                 uint8_t buffer_size) {
   uint8_t res = -1;
 
-  if (!lock || !buffer || !buffer_size || lock->mutex->writing ||
+  if (!lock || !buffer || !buffer_size ||
       buffer_size < lock->mutex->data_size) {
     return EXIT_FAILURE;
   }
@@ -66,16 +66,10 @@ static int common_lock_data_cmp(struct common_lock *lock, void *buffer,
 static int common_lock_data_write(struct common_lock *lock, void *buffer,
                                   uint8_t buffer_size) {
   if (!lock || !buffer || !buffer_size || lock->mutex->mu_lock ||
-      lock->mutex->writing || lock->mutex->reading ||
-      buffer_size < lock->mutex->data_size) {
+      lock->mutex->reading || buffer_size < lock->mutex->data_size) {
     return EXIT_FAILURE;
   }
-
-  lock->mutex->mu_lock = 1;
-  lock->mutex->writing = 1;
-  lock->mutex->mu_lock = 0;
   memcpy(lock->mutex->data_ptr, buffer, lock->mutex->data_size);
-
   return EXIT_SUCCESS;
 }
 
@@ -86,10 +80,6 @@ int mutex_init(void *data, uint8_t data_size, RW_mutex *o_mutex) {
   }
 
   mutex_conv conv = {.raw_data = o_mutex};
-
-  if (conv.full_data->mu_lock || conv.full_data->data_ptr) {
-    return EXIT_FAILURE;
-  }
 
   conv.full_data->mu_lock = 1;
 
@@ -190,6 +180,9 @@ int r_lock_data_read(R_lock *lock, void *o_buffer, uint8_t buffer_size) {
   }
   lock_conv conv = {.r_lock = lock};
   CHECK_INIT(conv.c_lock->mutex);
+  if (conv.c_lock->mutex->writing) {
+    return EXIT_FAILURE;
+  }
   return common_lock_data_read(conv.c_lock, o_buffer, buffer_size);
 }
 
@@ -199,6 +192,9 @@ int r_lock_data_cmp(R_lock *lock, void *buffer, uint8_t buffer_size) {
   }
   lock_conv conv = {.r_lock = lock};
   CHECK_INIT(conv.c_lock->mutex);
+  if (conv.c_lock->mutex->writing) {
+    return EXIT_FAILURE;
+  }
   return common_lock_data_cmp(conv.c_lock, buffer, buffer_size);
 }
 
